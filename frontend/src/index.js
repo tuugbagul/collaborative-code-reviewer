@@ -4,6 +4,15 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Suppress benign ResizeObserver warning triggered by Monaco Editor
+const RESIZE_OBSERVER_ERR = 'ResizeObserver loop completed with undelivered notifications.';
+window.addEventListener('error', (e) => {
+  if (e.message === RESIZE_OBSERVER_ERR) e.stopImmediatePropagation();
+});
+window.onerror = (message) => {
+  if (message === RESIZE_OBSERVER_ERR) return true;
+};
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
@@ -11,7 +20,4 @@ root.render(
   </React.StrictMode>
 );
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();

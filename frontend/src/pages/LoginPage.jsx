@@ -6,30 +6,40 @@ function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       const res = await loginUser(email, password);
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('username', res.data.username);
-      navigate('/editor');
+      navigate('/lobby');
     } catch (err) {
-      setError(err.response?.data?.error || 'Giriş başarısız');
+      if (!err.response) {
+        setError('Could not connect to server. Make sure all services are running.');
+      } else {
+        setError(err.response.data?.error || 'Login failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div style={styles.page}>
       <div style={styles.card}>
+        <div style={styles.logo}>{'</>'}</div>
         <h2 style={styles.title}>Code Reviewer</h2>
+        <p style={styles.subtitle}>Sign in to your account</p>
         <form onSubmit={handleSubmit}>
           <input
             style={styles.input}
             type="email"
-            placeholder="E-posta"
+            placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -37,16 +47,18 @@ function LoginPage() {
           <input
             style={styles.input}
             type="password"
-            placeholder="Şifre"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
           {error && <p style={styles.error}>{error}</p>}
-          <button style={styles.button} type="submit">Giriş Yap</button>
+          <button style={styles.button} type="submit" disabled={loading}>
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
         </form>
         <p style={styles.link}>
-          Hesabın yok mu? <Link to="/register">Kayıt Ol</Link>
+          Don't have an account? <Link to="/register" style={styles.linkAnchor}>Register</Link>
         </p>
       </div>
     </div>
@@ -56,27 +68,45 @@ function LoginPage() {
 const styles = {
   page: {
     display: 'flex', justifyContent: 'center', alignItems: 'center',
-    height: '100vh', backgroundColor: '#f0f2f5',
+    height: '100vh', backgroundColor: '#0f0f1a',
+    fontFamily: "'Segoe UI', sans-serif",
   },
   card: {
-    backgroundColor: '#fff', padding: '40px', borderRadius: '10px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '360px',
+    backgroundColor: '#13131f', padding: '36px 36px', borderRadius: '16px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)', width: '380px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+  },
+  logo: {
+    width: '44px', height: '44px', borderRadius: '11px',
+    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#fff', fontWeight: 'bold', fontSize: '15px',
+    marginBottom: '16px',
   },
   title: {
-    textAlign: 'center', marginBottom: '24px', color: '#333',
+    textAlign: 'center', marginBottom: '6px', color: '#f1f5f9',
+    fontSize: '22px', fontWeight: '800',
+  },
+  subtitle: {
+    color: '#64748b', fontSize: '13px', marginBottom: '24px', textAlign: 'center',
   },
   input: {
-    width: '100%', padding: '10px 12px', marginBottom: '14px',
-    border: '1px solid #ccc', borderRadius: '6px', fontSize: '14px',
-    boxSizing: 'border-box',
+    width: '100%', padding: '11px 13px', marginBottom: '12px',
+    backgroundColor: 'rgba(255,255,255,0.06)', color: '#e2e8f0',
+    border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px',
+    fontSize: '14px', boxSizing: 'border-box', outline: 'none',
   },
   button: {
-    width: '100%', padding: '10px', backgroundColor: '#4f46e5',
-    color: '#fff', border: 'none', borderRadius: '6px',
-    fontSize: '15px', cursor: 'pointer',
+    width: '100%', padding: '12px',
+    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+    boxShadow: '0 0 16px rgba(124,58,237,0.4)', marginTop: '2px',
   },
-  error: { color: 'red', fontSize: '13px', marginBottom: '10px' },
-  link: { textAlign: 'center', marginTop: '16px', fontSize: '13px' },
+  error: { color: '#f87171', fontSize: '12px', marginBottom: '10px', width: '100%' },
+  link: { textAlign: 'center', marginTop: '18px', fontSize: '13px', color: '#64748b' },
+  linkAnchor: { color: '#a78bfa', fontWeight: '600', textDecoration: 'none' },
 };
 
 export default LoginPage;

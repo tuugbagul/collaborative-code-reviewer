@@ -7,12 +7,12 @@ const register = async (req, res) => {
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
-      return res.status(400).json({ error: 'username, email and password are required' });
+      return res.status(400).json({ error: 'Username, email and password are required.' });
     }
 
     const exists = await User.findOne({ $or: [{ email }, { username }] });
     if (exists) {
-      return res.status(409).json({ error: 'Username or email already in use' });
+      return res.status(409).json({ error: 'This username or email is already in use.' });
     }
 
     const hashed = await bcrypt.hash(password, 12);
@@ -34,12 +34,12 @@ const login = async (req, res) => {
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'No account found with this email address.' });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
     const token = jwt.sign(

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import LobbyPage from './pages/LobbyPage';
 import EditorPage from './pages/EditorPage';
 import PrivateRoute from './components/PrivateRoute';
 
@@ -12,7 +13,15 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route
-          path="/editor"
+          path="/lobby"
+          element={
+            <PrivateRoute>
+              <LobbyPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/editor/:roomId"
           element={
             <PrivateRoute>
               <EditorPage />

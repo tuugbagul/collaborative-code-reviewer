@@ -14,8 +14,9 @@ SEVERITY_MAP = {
 
 
 def analyze(code: str) -> list[dict]:
-    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as f:
-        f.write(code)
+    cleaned = code.replace('\r\n', '\n').replace('\r', '\n')
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="wb", delete=False) as f:
+        f.write(cleaned.encode('utf-8'))
         tmp_path = f.name
 
     try:

@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
 function EditorPage() {
   const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState('// Kodunuzu buraya yazın...');
+  const [code, setCode] = useState('// Write your code here...');
   const [issues, setIssues] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
 
-  const [roomInput, setRoomInput] = useState('');
-  const [roomId, setRoomId] = useState('');
   const [connectedUsers, setConnectedUsers] = useState([]);
 
   const [comments, setComments] = useState([]);
@@ -21,6 +19,7 @@ function EditorPage() {
   const isRemoteChange = useRef(false);
 
   const navigate = useNavigate();
+  const { roomId } = useParams();
   const username = localStorage.getItem('username');
 
   useEffect(() => {
@@ -42,7 +41,7 @@ function EditorPage() {
 
     socket.on('room-state', ({ currentCode, users }) => {
       isRemoteChange.current = true;
-      setCode(currentCode || '// Kodunuzu buraya yazın...');
+      setCode(currentCode || '// Write your code here...');
       setConnectedUsers(users || []);
     });
 
@@ -50,14 +49,21 @@ function EditorPage() {
       setComments((prev) => [...prev, { username: commenter, comment }]);
     });
 
+    socket.emit('join-room', { roomId, username });
+
     return () => socket.disconnect();
-  }, []);
+  }, [roomId, username]);
 
   const handleLogout = () => {
     if (socketRef.current) socketRef.current.disconnect();
     localStorage.removeItem('token');
     localStorage.removeItem('username');
     navigate('/login');
+  };
+
+  const handleLeaveRoom = () => {
+    if (socketRef.current) socketRef.current.disconnect();
+    navigate('/lobby');
   };
 
   const handleAnalyze = async () => {
@@ -75,28 +81,6 @@ function EditorPage() {
     } finally {
       setAnalyzing(false);
     }
-  };
-
-  const generateRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
-
-  const joinRoom = (id) => {
-    if (socketRef.current) {
-      socketRef.current.emit('join-room', { roomId: id, username });
-    }
-  };
-
-  const handleCreateRoom = () => {
-    const newId = generateRoomId();
-    setRoomInput(newId);
-    setRoomId(newId);
-    joinRoom(newId);
-  };
-
-  const handleJoinRoom = () => {
-    const id = roomInput.trim();
-    if (!id) return;
-    setRoomId(id);
-    joinRoom(id);
   };
 
   const handleCodeChange = (newCode) => {
@@ -118,47 +102,53 @@ function EditorPage() {
     setCommentInput('');
   };
 
-  const severityColor = (severity) => {
-    if (severity === 'error') return '#f44747';
-    if (severity === 'warning') return '#e5c07b';
-    return '#9e9e9e';
+  const severityColor = (s) =>
+    s === 'error' ? '#f87171' : s === 'warning' ? '#fbbf24' : '#6b7280';
+
+  const avatarColor = (name) => {
+    const colors = ['#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626'];
+    return colors[name?.charCodeAt(0) % colors.length] || '#7c3aed';
   };
 
   return (
     <div style={styles.page}>
+      {/* Navbar */}
       <nav style={styles.navbar}>
-        <span style={styles.navTitle}>Code Reviewer</span>
+        <div style={styles.navBrand}>
+          <div style={styles.navLogo}>{'</>'}</div>
+          <span style={styles.navTitle}>Code Reviewer</span>
+        </div>
+        <div style={styles.navCenter}>
+          <select style={styles.select} value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <option value="javascript" style={styles.selectOption}>JavaScript</option>
+            <option value="python" style={styles.selectOption}>Python</option>
+          </select>
+          <button style={styles.analyzeBtn} onClick={handleAnalyze} disabled={analyzing}>
+            {analyzing ? (
+              <span style={styles.analyzingDot}>Analyzing...</span>
+            ) : (
+              'Analyze Code'
+            )}
+          </button>
+        </div>
         <div style={styles.navRight}>
-          <span style={styles.username}>{username}</span>
-          <button style={styles.logoutBtn} onClick={handleLogout}>Çıkış</button>
+          <div style={styles.roomInfo}>
+            <span style={styles.roomBadgeDot} />
+            <span style={styles.roomInfoText}>Room <b>{roomId}</b></span>
+            <span style={styles.onlineCount}>
+              {connectedUsers.length} online
+            </span>
+            <button style={styles.leaveBtn} onClick={handleLeaveRoom}>Leave</button>
+          </div>
+          <div style={{ ...styles.avatar, backgroundColor: avatarColor(username) }}>
+            {username?.[0]?.toUpperCase()}
+          </div>
+          <span style={styles.usernameText}>{username}</span>
+          <button style={styles.logoutBtn} onClick={handleLogout}>Sign out</button>
         </div>
       </nav>
 
-      <div style={styles.toolbar}>
-        <select style={styles.select} value={language} onChange={(e) => setLanguage(e.target.value)}>
-          <option value="javascript">JavaScript</option>
-          <option value="python">Python</option>
-        </select>
-        <button style={styles.analyzeBtn} onClick={handleAnalyze} disabled={analyzing}>
-          {analyzing ? 'Analyzing...' : 'Analiz Et'}
-        </button>
-      </div>
-
-      <div style={styles.sessionPanel}>
-        <input
-          style={styles.roomInput}
-          placeholder="Room ID"
-          value={roomInput}
-          onChange={(e) => setRoomInput(e.target.value)}
-        />
-        <button style={styles.sessionBtn} onClick={handleCreateRoom}>Create Room</button>
-        <button style={styles.sessionBtn} onClick={handleJoinRoom}>Join Room</button>
-        {roomId && <span style={styles.roomLabel}>Room: <b>{roomId}</b></span>}
-        {connectedUsers.length > 0 && (
-          <span style={styles.usersLabel}>Users: {connectedUsers.join(', ')}</span>
-        )}
-      </div>
-
+      {/* Main Content */}
       <div style={styles.mainContent}>
         <div style={styles.editorWrapper}>
           <Editor
@@ -167,48 +157,72 @@ function EditorPage() {
             theme="vs-dark"
             value={code}
             onChange={handleCodeChange}
-            options={{ fontSize: 14, minimap: { enabled: false } }}
+            options={{ fontSize: 14, minimap: { enabled: false }, mouseWheelZoom: true }}
           />
         </div>
 
+        {/* Comment Panel */}
         <div style={styles.commentPanel}>
-          <div style={styles.commentTitle}>Comments</div>
+          <div style={styles.commentHeader}>
+            <span style={styles.commentTitle}>Comments</span>
+            {comments.length > 0 && (
+              <span style={styles.commentCount}>{comments.length}</span>
+            )}
+          </div>
           <div style={styles.commentList}>
-            {comments.map((c, i) => (
-              <div key={i} style={styles.commentItem}>
-                <span style={styles.commentUser}>{c.username}: </span>
-                <span>{c.comment}</span>
-              </div>
-            ))}
+            {comments.length === 0 ? (
+              <div style={styles.emptyComments}>No comments yet.<br />Be the first to comment.</div>
+            ) : (
+              comments.map((c, i) => (
+                <div key={i} style={styles.commentItem}>
+                  <div style={styles.commentItemHeader}>
+                    <div style={{ ...styles.commentAvatar, backgroundColor: avatarColor(c.username) }}>
+                      {c.username[0]?.toUpperCase()}
+                    </div>
+                    <span style={styles.commentUser}>{c.username}</span>
+                  </div>
+                  <div style={styles.commentText}>{c.comment}</div>
+                </div>
+              ))
+            )}
           </div>
           <div style={styles.commentInputArea}>
             <input
               style={styles.commentInput}
-              placeholder="Add a comment..."
+              placeholder={roomId ? 'Add a comment...' : 'Join a room to comment'}
               value={commentInput}
+              disabled={!roomId}
               onChange={(e) => setCommentInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
             />
-            <button style={styles.sendBtn} onClick={handleSendComment}>Send</button>
+            <button style={styles.sendBtn} onClick={handleSendComment} disabled={!roomId}>
+              &#9658;
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Issues Panel */}
       {issues.length > 0 && (
         <div style={styles.issuesPanel}>
-          <div style={styles.issuesTitle}>Issues ({issues.length})</div>
-          {issues.map((issue, i) => (
-            <div
-              key={i}
-              style={{ ...styles.issueItem, borderLeft: `3px solid ${severityColor(issue.severity)}` }}
-            >
-              <span style={{ color: severityColor(issue.severity), fontWeight: 'bold' }}>
-                [{issue.severity.toUpperCase()}]
-              </span>
-              {issue.line > 0 && <span style={styles.issueLineNum}> Line {issue.line}:</span>}
-              <span style={styles.issueMsg}> {issue.message}</span>
-            </div>
-          ))}
+          <div style={styles.issuesHeader}>
+            <span style={styles.issuesTitle}>Issues</span>
+            <span style={styles.issuesBadge}>{issues.length}</span>
+          </div>
+          <div style={styles.issuesList}>
+            {issues.map((issue, i) => (
+              <div
+                key={i}
+                style={{ ...styles.issueItem, borderLeftColor: severityColor(issue.severity) }}
+              >
+                <span style={{ ...styles.issueSeverity, color: severityColor(issue.severity) }}>
+                  {issue.severity.toUpperCase()}
+                </span>
+                {issue.line > 0 && <span style={styles.issueLine}>Line {issue.line}</span>}
+                <span style={styles.issueMsg}>{issue.message}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -216,83 +230,158 @@ function EditorPage() {
 }
 
 const styles = {
-  page: { display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: '#1e1e1e' },
+  page: {
+    display: 'flex', flexDirection: 'column', height: '100vh',
+    backgroundColor: '#0f0f1a', fontFamily: "'Segoe UI', sans-serif",
+  },
+
+  /* Navbar */
   navbar: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#252526', padding: '0 20px', height: '50px',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'linear-gradient(135deg, #1a0a2e 0%, #0a1628 100%)',
+    padding: '0 20px', height: '52px',
+    borderBottom: '1px solid rgba(124, 58, 237, 0.3)',
+    boxShadow: '0 2px 20px rgba(0,0,0,0.4)',
   },
-  navTitle: { color: '#fff', fontWeight: 'bold', fontSize: '16px' },
-  navRight: { display: 'flex', alignItems: 'center', gap: '16px' },
-  username: { color: '#ccc', fontSize: '14px' },
-  logoutBtn: {
-    padding: '6px 14px', backgroundColor: '#f44747', color: '#fff',
-    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px',
+  navBrand: { display: 'flex', alignItems: 'center', gap: '8px' },
+  navLogo: {
+    width: '30px', height: '30px', borderRadius: '7px',
+    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#fff', fontWeight: 'bold', fontSize: '11px',
   },
-  toolbar: {
-    display: 'flex', alignItems: 'center', gap: '12px',
-    backgroundColor: '#2d2d2d', padding: '8px 20px', borderBottom: '1px solid #3c3c3c',
+  navTitle: {
+    color: '#fff', fontWeight: '700', fontSize: '15px',
+    letterSpacing: '0.3px',
   },
+  navCenter: { display: 'flex', alignItems: 'center', gap: '8px' },
   select: {
-    padding: '6px 10px', backgroundColor: '#3c3c3c', color: '#fff',
-    border: '1px solid #555', borderRadius: '4px', fontSize: '13px', cursor: 'pointer',
+    padding: '6px 10px', backgroundColor: '#1a1a2e', color: '#e2e8f0',
+    border: '1px solid rgba(255,255,255,0.15)', borderRadius: '7px',
+    fontSize: '13px', cursor: 'pointer', outline: 'none',
+  },
+  selectOption: {
+    backgroundColor: '#1a1a2e', color: '#e2e8f0',
   },
   analyzeBtn: {
-    padding: '6px 16px', backgroundColor: '#4f46e5', color: '#fff',
-    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px',
+    padding: '7px 16px',
+    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+    color: '#fff', border: 'none', borderRadius: '7px',
+    cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+    boxShadow: '0 0 10px rgba(124,58,237,0.4)',
   },
-  sessionPanel: {
-    display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
-    backgroundColor: '#252526', padding: '8px 20px', borderBottom: '1px solid #3c3c3c',
+  analyzingDot: { opacity: 0.7 },
+  navRight: { display: 'flex', alignItems: 'center', gap: '10px' },
+  roomInfo: {
+    display: 'flex', alignItems: 'center', gap: '7px',
+    backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: '8px', padding: '4px 12px',
   },
-  roomInput: {
-    padding: '5px 10px', backgroundColor: '#3c3c3c', color: '#fff',
-    border: '1px solid #555', borderRadius: '4px', fontSize: '13px', width: '140px',
+  roomBadgeDot: {
+    width: '7px', height: '7px', borderRadius: '50%',
+    backgroundColor: '#22c55e', display: 'inline-block', flexShrink: 0,
   },
-  sessionBtn: {
-    padding: '5px 12px', backgroundColor: '#0e7a0d', color: '#fff',
-    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px',
+  roomInfoText: { color: '#cbd5e1', fontSize: '13px' },
+  onlineCount: {
+    backgroundColor: 'rgba(34,197,94,0.15)', color: '#86efac',
+    fontSize: '11px', fontWeight: '700', padding: '2px 7px', borderRadius: '7px',
   },
-  roomLabel: { color: '#ccc', fontSize: '13px' },
-  usersLabel: { color: '#9cdcfe', fontSize: '13px' },
+  leaveBtn: {
+    padding: '3px 10px', backgroundColor: 'rgba(251,191,36,0.15)',
+    color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)',
+    borderRadius: '5px', cursor: 'pointer', fontSize: '12px',
+  },
+  avatar: {
+    width: '30px', height: '30px', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#fff', fontWeight: '700', fontSize: '12px',
+  },
+  usernameText: { color: '#cbd5e1', fontSize: '13px' },
+  logoutBtn: {
+    padding: '5px 12px', backgroundColor: 'rgba(248,113,113,0.15)',
+    color: '#f87171', border: '1px solid rgba(248,113,113,0.3)',
+    borderRadius: '7px', cursor: 'pointer', fontSize: '12px',
+  },
+
+  /* Main */
   mainContent: { display: 'flex', flex: 1, overflow: 'hidden' },
   editorWrapper: { flex: 1 },
+
+  /* Comment Panel */
   commentPanel: {
-    width: '260px', backgroundColor: '#252526', borderLeft: '1px solid #3c3c3c',
+    width: '260px', backgroundColor: '#13131f',
+    borderLeft: '1px solid rgba(255,255,255,0.07)',
     display: 'flex', flexDirection: 'column',
   },
-  commentTitle: {
-    color: '#fff', fontWeight: 'bold', fontSize: '14px',
-    padding: '10px 14px', borderBottom: '1px solid #3c3c3c',
+  commentHeader: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '11px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+  },
+  commentTitle: { color: '#e2e8f0', fontWeight: '700', fontSize: '13px' },
+  commentCount: {
+    backgroundColor: 'rgba(124,58,237,0.3)', color: '#c4b5fd',
+    fontSize: '11px', fontWeight: '700', padding: '2px 7px', borderRadius: '10px',
   },
   commentList: {
-    flex: 1, overflowY: 'auto', padding: '10px 14px',
+    flex: 1, overflowY: 'auto', padding: '10px',
     display: 'flex', flexDirection: 'column', gap: '8px',
   },
-  commentItem: { fontSize: '13px', color: '#d4d4d4', lineHeight: '1.4' },
-  commentUser: { color: '#4fc1ff', fontWeight: 'bold' },
+  emptyComments: {
+    color: '#475569', fontSize: '12px', textAlign: 'center',
+    marginTop: '30px', lineHeight: '1.6',
+  },
+  commentItem: {
+    backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: '8px',
+    padding: '10px', display: 'flex', flexDirection: 'column', gap: '5px',
+  },
+  commentItemHeader: { display: 'flex', alignItems: 'center', gap: '7px' },
+  commentAvatar: {
+    width: '22px', height: '22px', borderRadius: '50%',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    color: '#fff', fontWeight: '700', fontSize: '10px', flexShrink: 0,
+  },
+  commentUser: { color: '#a78bfa', fontWeight: '600', fontSize: '12px' },
+  commentText: { color: '#cbd5e1', fontSize: '12px', lineHeight: '1.4', paddingLeft: '29px' },
   commentInputArea: {
-    display: 'flex', gap: '6px', padding: '10px 14px', borderTop: '1px solid #3c3c3c',
+    display: 'flex', gap: '6px', padding: '10px 10px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
   },
   commentInput: {
-    flex: 1, padding: '5px 8px', backgroundColor: '#3c3c3c', color: '#fff',
-    border: '1px solid #555', borderRadius: '4px', fontSize: '13px',
+    flex: 1, padding: '8px 10px', backgroundColor: 'rgba(255,255,255,0.06)',
+    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px', fontSize: '12px', outline: 'none',
   },
   sendBtn: {
-    padding: '5px 10px', backgroundColor: '#4f46e5', color: '#fff',
-    border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px',
+    width: '34px', height: '34px',
+    background: 'linear-gradient(135deg, #7c3aed, #2563eb)',
+    color: '#fff', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontSize: '13px', flexShrink: 0,
   },
+
+  /* Issues */
   issuesPanel: {
-    backgroundColor: '#1a1a2e', borderTop: '1px solid #3c3c3c',
-    padding: '10px 20px', maxHeight: '180px', overflowY: 'auto',
+    backgroundColor: '#0d0d18', borderTop: '1px solid rgba(255,255,255,0.07)',
+    maxHeight: '160px', overflowY: 'auto',
   },
-  issuesTitle: { color: '#fff', fontWeight: 'bold', fontSize: '13px', marginBottom: '8px' },
+  issuesHeader: {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    padding: '8px 16px 4px', position: 'sticky', top: 0,
+    backgroundColor: '#0d0d18',
+  },
+  issuesTitle: { color: '#94a3b8', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px' },
+  issuesBadge: {
+    backgroundColor: 'rgba(248,113,113,0.2)', color: '#f87171',
+    fontSize: '11px', fontWeight: '700', padding: '1px 6px', borderRadius: '7px',
+  },
+  issuesList: { padding: '4px 16px 10px', display: 'flex', flexDirection: 'column', gap: '4px' },
   issueItem: {
-    padding: '4px 10px', marginBottom: '4px',
-    backgroundColor: '#2d2d2d', borderRadius: '3px', fontSize: '13px',
+    display: 'flex', alignItems: 'baseline', gap: '8px',
+    padding: '5px 10px', backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: '6px', borderLeft: '3px solid', fontSize: '12px',
   },
-  issueLineNum: { color: '#888' },
-  issueMsg: { color: '#d4d4d4' },
+  issueSeverity: { fontWeight: '700', fontSize: '10px', flexShrink: 0 },
+  issueLine: { color: '#475569', fontSize: '11px', flexShrink: 0 },
+  issueMsg: { color: '#94a3b8', fontSize: '12px' },
 };
 
 export default EditorPage;
